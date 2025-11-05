@@ -2,8 +2,9 @@
 
 A comprehensive biometric authentication system implementing **4 biometric modalities**: Fingerprint, Iris, Face, and Voice recognition with a modern web interface.
 
-![alt text](image.png)
-
+<img width="2879" height="1558" alt="image" src="https://github.com/user-attachments/assets/2cdbebf9-d497-4415-8c23-5a3fc3572984" />
+<img width="2876" height="1560" alt="image" src="https://github.com/user-attachments/assets/8ee20b18-26a1-4bed-91ba-f73b9449d997" />
+<img width="2879" height="1573" alt="image" src="https://github.com/user-attachments/assets/2b91b8fc-81b5-46b3-9ddf-efc689450e70" />
 ---
 
 ## 📋 Table of Contents
