@@ -2,6 +2,8 @@
 
 A comprehensive biometric authentication system implementing **4 biometric modalities**: Fingerprint, Iris, Face, and Voice recognition with a modern web interface.
 
+![alt text](image.png)
+
 ---
 
 ## 📋 Table of Contents
@@ -430,13 +432,10 @@ multimodal_biometric_auth/
 │       └── 📂 fingerprints/
 │
 ├── 📂 results/                                  # Output files and reports
-│   ├── 📂 logs/                                 # Application logs
-│   ├── 📂 plots/                                # Performance visualizations
-│   └── 📂 reports/                              # Analysis reports
-│
-└── 📂 tests/                                    # Unit tests (to be implemented)
-    ├── __init__.py
-    └── test_fingerprint.py                      # Fingerprint module tests
+    ├── 📂 logs/                                 # Application logs
+    ├── 📂 plots/                                # Performance visualizations
+    └── 📂 reports/                              # Analysis reports
+
 ```
 
 ### Key Files Explained
