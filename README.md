@@ -27,14 +27,20 @@ A comprehensive biometric authentication system implementing **4 biometric modal
 
 ### Core Functionalities
 - **4 Biometric Modalities**: Fingerprint, Iris, Face, and Voice
-- **3 Operating Modes**:
+- **4 Operating Modes**:
   - 📝 **Enrollment**: Register new users with biometric data
   - 🔍 **Verification (1:1)**: Verify claimed identity
   - 🔎 **Identification (1:N)**: Identify unknown person from database
+  - 🔀 **Multimodal Fusion**: Combine multiple biometrics for enhanced security
 - **Database Management**: Add, view, delete users per modality
 - **Web Interface**: Modern Streamlit-based UI with real-time processing
 
 ### Advanced Features
+- **Multimodal Fusion** with 4 strategies:
+  - ⚖️ Weighted Sum (configurable weights)
+  - 🗳️ Voting (majority decision)
+  - 🌲 Random Forest (ML-based)
+  - 🔬 SVM (ML-based)
 - Multi-eye support for iris (Left/Right separation)
 - Eye side auto-detection with validation
 - Webcam capture for face enrollment/verification
@@ -257,7 +263,20 @@ The application will open in your default browser at `http://localhost:8501`
 4. Click **Identify** button
 5. View ranked results with similarity scores
 
-### 4. Database Management
+### 4. Multimodal Fusion
+1. Navigate to **Multimodal Fusion** page
+2. Select **Fusion Strategy** (Weighted Sum/Voting/Random Forest/SVM)
+3. Enter **User ID** (must be enrolled in 2+ modalities)
+4. Configure weights (for Weighted Sum method)
+5. Upload/capture samples for each enrolled modality:
+   - **Fingerprint**: Upload fingerprint image
+   - **Face**: Upload image or use webcam
+   - **Iris**: Upload iris image, select eye side
+   - **Voice**: Upload audio or record live
+6. View **individual scores** and **fusion decision**
+7. Result: ✅ ACCESS GRANTED or ❌ ACCESS DENIED with confidence score
+
+### 5. Database Management
 1. Navigate to **Settings** page
 2. Scroll to **Database Management**
 3. Select modality to manage
@@ -351,15 +370,92 @@ The application will open in your default browser at `http://localhost:8501`
 
 ---
 
+### 🔀 Multimodal Fusion
+
+**Concept**: Combining multiple biometric modalities improves accuracy and security by leveraging the strengths of each trait.
+
+**Fusion Strategies Implemented**:
+
+#### 1. ⚖️ Weighted Sum Fusion
+- **Method**: Score-level fusion with configurable weights
+- **Formula**: `Fused_Score = w₁·S₁ + w₂·S₂ + w₃·S₃ + w₄·S₄`
+- **Default Weights**: Fingerprint (0.3), Face (0.3), Iris (0.2), Voice (0.2)
+- **Advantages**: Simple, fast, interpretable
+- **Best For**: Real-time applications, trusted modalities
+
+#### 2. 🗳️ Voting Fusion
+- **Method**: Decision-level fusion with majority rule
+- **Rule**: Requires 3 out of 4 modalities to accept
+- **Decision**: Each modality votes ACCEPT/REJECT based on threshold
+- **Advantages**: Robust to single modality failure
+- **Best For**: High-security applications
+
+#### 3. 🌲 Random Forest Fusion
+- **Method**: ML-based fusion using Random Forest classifier
+- **Training**: Requires labeled genuine/impostor samples
+- **Features**: 4D vector [fingerprint_score, face_score, iris_score, voice_score]
+- **Advantages**: Learns optimal fusion weights automatically
+- **Best For**: Large datasets with training data available
+
+#### 4. 🔬 SVM Fusion
+- **Method**: Support Vector Machine with RBF kernel
+- **Training**: Binary classification (genuine=1, impostor=0)
+- **Advantages**: Strong generalization, handles non-linear patterns
+- **Best For**: Small to medium datasets
+
+**Fusion Benefits**:
+- ✅ **Higher Accuracy**: FAR reduced by 50-90% compared to single modality
+- ✅ **Redundancy**: Works even if one modality fails
+- ✅ **Anti-Spoofing**: Harder to spoof multiple biometrics
+- ✅ **Flexibility**: User can enroll 2, 3, or all 4 modalities
+
+**Performance (Estimated)**:
+
+| Fusion Method | Accuracy | Speed | Training Required |
+|---------------|----------|-------|-------------------|
+| Weighted Sum  | Good     | Fast  | ❌ No             |
+| Voting        | Very Good| Fast  | ❌ No             |
+| Random Forest | Excellent| Medium| ✅ Yes            |
+| SVM           | Excellent| Medium| ✅ Yes            |
+
+**Usage Example**:
+```python
+from modules.fusion import MultimodalFusion
+
+# Initialize fusion system
+fusion = MultimodalFusion(fusion_method='weighted_sum')
+
+# Set custom weights
+fusion.set_weights({
+    'fingerprint': 0.4,
+    'face': 0.3,
+    'iris': 0.2,
+    'voice': 0.1
+})
+
+# Fuse scores
+scores = {
+    'fingerprint': 0.85,
+    'face': 0.72,
+    'iris': 0.90,
+    'voice': 0.65
+}
+is_verified, confidence = fusion.fuse(scores)
+print(f"Decision: {'VERIFIED' if is_verified else 'REJECTED'}")
+print(f"Confidence: {confidence:.1%}")
+```
+
+---
+
 ## 📁 Project Structure
 
 ```
 multimodal_biometric_auth/
 │
-├── 📄 app.py                                    # Main application entry point (1935 lines)
+├── 📄 app.py                                    # Main application entry point (2200+ lines)
 │                                                 # - Streamlit web interface
-│                                                 # - 5 pages: Dashboard, Enrollment, Verification, 
-│                                                 #            Identification, Settings
+│                                                 # - 6 pages: Dashboard, Enrollment, Verification, 
+│                                                 #            Identification, Multimodal Fusion, Settings
 │                                                 # - Webcam/microphone integration
 │
 ├── 📄 main.py                                   # CLI interface (alternative to web UI)
@@ -390,15 +486,20 @@ multimodal_biometric_auth/
 │   │                                             # Template: {eyes: {left/right: {features, quality}}}
 │   │                                             # Quality metrics: sharpness, contrast, illumination
 │   │
-│   ├── 😊 face_recognition.py                   # Face module (580 lines)
-│   │                                             # Algorithm: VGG-Face via DeepFace
-│   │                                             # Detector: RetinaFace
-│   │                                             # Template: {embeddings: [4096-D vectors]}
-│   │
-│   └── 🎤 voice_recognition.py                  # Voice module (720 lines)
-│                                                 # Algorithm: ECAPA-TDNN speaker embedding
-│                                                 # Preprocessing: VAD, resampling, normalization
-│                                                 # Template: {embedding: 192-D vector, metadata}
+   ├── 😊 face_recognition.py                   # Face module (580 lines)
+   │                                             # Algorithm: VGG-Face via DeepFace
+   │                                             # Detector: RetinaFace
+   │                                             # Template: {embeddings: [4096-D vectors]}
+   │
+   ├── 🎤 voice_recognition.py                  # Voice module (720 lines)
+   │                                             # Algorithm: ECAPA-TDNN speaker embedding
+   │                                             # Preprocessing: VAD, resampling, normalization
+   │                                             # Template: {embedding: 192-D vector, metadata}
+   │
+   └── 🔀 fusion.py                             # Multimodal fusion module (430 lines)
+                                                 # Fusion strategies: Weighted Sum, Voting, RF, SVM
+                                                 # Score-level and decision-level fusion
+                                                 # ML model training and prediction
 │
 ├── 📂 data/                                     # Data storage directory
 │   │

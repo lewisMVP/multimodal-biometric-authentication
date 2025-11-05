@@ -18,6 +18,7 @@ from modules.fingerprint_recognition import FingerprintRecognition
 from modules.iris_recognition import IrisRecognition
 from modules.face_recognition import FaceRecognition
 from modules.voice_recognition import VoiceRecognition
+from modules.fusion import MultimodalFusion
 
 # Page configuration
 st.set_page_config(
@@ -77,6 +78,8 @@ if 'face_system' not in st.session_state:
 if 'voice_system' not in st.session_state:
     with st.spinner("🎤 Initializing Voice Recognition (first run downloads ~80MB model)..."):
         st.session_state.voice_system = VoiceRecognition()
+if 'fusion_system' not in st.session_state:
+    st.session_state.fusion_system = MultimodalFusion(fusion_method='weighted_sum')
 if 'enrolled_user' not in st.session_state:
     st.session_state.enrolled_user = None
 if 'current_mode' not in st.session_state:
@@ -90,8 +93,8 @@ def main():
         
         mode = st.radio(
             "Select Mode:",
-            ["📊 Dashboard", "✍️ Enrollment", "🔍 Verification", "🔎 Identification", "⚙️ Settings"],
-            index=["📊 Dashboard", "✍️ Enrollment", "🔍 Verification", "🔎 Identification", "⚙️ Settings"].index(st.session_state.current_mode),
+            ["📊 Dashboard", "✍️ Enrollment", "🔍 Verification", "🔎 Identification", "🔀 Multimodal Fusion", "⚙️ Settings"],
+            index=["📊 Dashboard", "✍️ Enrollment", "🔍 Verification", "🔎 Identification", "🔀 Multimodal Fusion", "⚙️ Settings"].index(st.session_state.current_mode),
             key="mode_radio"
         )
         
@@ -123,6 +126,8 @@ def main():
         show_verification()
     elif mode == "🔎 Identification":
         show_identification()
+    elif mode == "🔀 Multimodal Fusion":
+        show_multimodal_fusion()
     elif mode == "⚙️ Settings":
         show_settings()
 
@@ -1789,6 +1794,601 @@ def identify_voice():
             finally:
                 if os.path.exists(temp_audio_path):
                     os.unlink(temp_audio_path)
+
+def show_multimodal_fusion():
+    """Multimodal Fusion - Combine multiple biometric modalities"""
+    st.header("🔀 Multimodal Fusion Verification")
+    
+    # Introduction
+    with st.container():
+        st.info("""
+        🎯 **What is Fusion?**
+        
+        **Fusion = Combining multiple results**
+        
+        **Simple Example:**
+        - Fingerprint: 85%
+        - Face: 90%
+        - Iris: 80%
+        - → Fusion combines these → Final Result: 86.7%
+        
+        **Why Better?**
+        - ✓ More secure (multiple layers of verification)
+        - ✓ More accurate (if one fails, others compensate)
+        - ✓ Harder to spoof (need to fake multiple modalities)
+        """)
+    
+    # Step 1: Select fusion method
+    st.markdown("### 📌 Step 1: Select Fusion Method")
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        fusion_method = st.selectbox(
+            "Choose fusion strategy:",
+            ["weighted_sum", "voting", "random_forest", "svm"],
+            format_func=lambda x: {
+                "weighted_sum": "⚖️ Weighted Sum (Simplest)",
+                "voting": "🗳️ Voting (Requires 3/4 Pass)",
+                "random_forest": "🌲 Random Forest (AI-based)",
+                "svm": "🔬 SVM (Advanced AI)"
+            }[x]
+        )
+        
+        # Explain each method
+        if fusion_method == "weighted_sum":
+            st.info("""
+            **⚖️ How it works:**
+            - Weighted average of scores
+            - Example: (Fingerprint × 30%) + (Face × 30%) + (Iris × 20%) + (Voice × 20%)
+            - Simple, fast, easy to understand
+            """)
+        elif fusion_method == "voting":
+            st.info("""
+            **🗳️ How it works:**
+            - Each modality votes PASS or FAIL
+            - Requires at least 3/4 modalities to vote PASS
+            - Strict, high security
+            """)
+        elif fusion_method == "random_forest":
+            st.info("""
+            **🌲 How it works:**
+            - AI learns from real data
+            - Automatically finds best patterns
+            - High accuracy but requires training
+            """)
+        else:  # svm
+            st.info("""
+            **🔬 How it works:**
+            - AI analyzes boundary between genuine/impostor
+            - Learns from training data
+            - Good for complex data
+            """)
+        
+        # Update fusion method
+        if fusion_method != st.session_state.fusion_system.fusion_method:
+            st.session_state.fusion_system = MultimodalFusion(fusion_method=fusion_method)
+            st.success(f"✓ Switched to: {fusion_method}")
+    
+    with col2:
+        st.metric("Current Method", fusion_method.upper().replace('_', ' '))
+        fusion_stats = st.session_state.fusion_system.get_statistics()
+        if fusion_stats['model_trained']:
+            st.success("✓ AI Trained")
+        else:
+            if fusion_method in ["random_forest", "svm"]:
+                st.warning("⚠️ Need Training")
+    
+    # Weights configuration for weighted_sum
+    if fusion_method == "weighted_sum":
+        st.markdown("---")
+        st.markdown("### ⚙️ Customize Weights (Optional)")
+        
+        st.markdown("""
+        **What are weights?** 
+        - Determines which modality is more important
+        - Example: Fingerprint 30%, Face 30%, Iris 20%, Voice 20%
+        - Total must = 100% (1.0)
+        """)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            w_fp = st.slider("👆 Fingerprint (%)", 0, 100, 30, 5)
+        with col2:
+            w_face = st.slider("😊 Face (%)", 0, 100, 30, 5)
+        with col3:
+            w_iris = st.slider("👁️ Iris (%)", 0, 100, 20, 5)
+        with col4:
+            w_voice = st.slider("🎤 Voice (%)", 0, 100, 20, 5)
+        
+        total_weight = w_fp + w_face + w_iris + w_voice
+        
+        if total_weight != 100:
+            st.warning(f"⚠️ Total = {total_weight}%, required = 100%. Will auto-normalize.")
+        else:
+            st.success(f"✓ Total weights = 100%")
+        
+        if st.button("💾 Save Weights", type="primary"):
+            st.session_state.fusion_system.set_weights({
+                'fingerprint': w_fp / 100.0,
+                'face': w_face / 100.0,
+                'iris': w_iris / 100.0,
+                'voice': w_voice / 100.0
+            })
+            st.success("✓ Weights updated!")
+    
+    st.markdown("---")
+    
+    # User ID input
+    st.markdown("### � Step 2: Enter User ID")
+    user_id = st.text_input("Enter User ID to verify:", key="fusion_user_id", 
+                             placeholder="Example: user1, john_doe, ...")
+    
+    if not user_id:
+        st.info("👆 Enter User ID to begin")
+        
+        # Hiển thị ví dụ demo
+        with st.expander("📖 See how it works"):
+            st.markdown("""
+            **Verification Process:**
+            
+            1️⃣ Enter User ID (Example: "user1")
+
+            2️⃣ Upload Biometric Samples:
+            - Fingerprint → System scores: 85%
+            - Face → System scores: 92%
+            - Iris → System scores: 78%
+            
+            3️⃣ Fusion combines scores:
+            - Weighted Sum: (85×0.3 + 92×0.3 + 78×0.2) = 84.8%
+            - Compare threshold (threshold): 84.8% > 70% → **PASS ✅**
+            
+            4️⃣ Result: ACCESS GRANTED
+            """)
+        return
+    
+    # Check which modalities are enrolled
+    st.markdown("---")
+    st.markdown("### � Enrollment Status")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    fp_enrolled = user_id in st.session_state.fingerprint_system.templates
+    iris_enrolled = user_id in st.session_state.iris_system.templates
+    face_enrolled = user_id in st.session_state.face_system.enrolled_users
+    voice_enrolled = user_id in st.session_state.voice_system.templates
+    
+    with col1:
+        if fp_enrolled:
+            st.success("👆 Fingerprint ✓")
+        else:
+            st.error("👆 Fingerprint ✗")
+    
+    with col2:
+        if face_enrolled:
+            st.success("😊 Face ✓")
+        else:
+            st.error("😊 Face ✗")
+
+    with col3:
+        if iris_enrolled:
+            st.success("👁️ Iris ✓")
+        else:
+            st.error("👁️ Iris ✗")
+    
+    with col4:
+        if voice_enrolled:
+            st.success("🎤 Voice ✓")
+        else:
+            st.error("🎤 Voice ✗")
+
+    enrolled_modalities = []
+    if fp_enrolled:
+        enrolled_modalities.append("fingerprint")
+    if face_enrolled:
+        enrolled_modalities.append("face")
+    if iris_enrolled:
+        enrolled_modalities.append("iris")
+    if voice_enrolled:
+        enrolled_modalities.append("voice")
+    
+    if len(enrolled_modalities) < 2:
+        st.warning(f"""
+        ⚠️ **User '{user_id}' needs at least 2 modalities enrolled for fusion!**
+        
+        Currently: {len(enrolled_modalities)} modality
+        
+        💡 Guide: Go to "Enroll" tab to register more modalities
+        """)
+        return
+    
+    st.success(f"""
+    ✓ **User '{user_id}' has enrolled {len(enrolled_modalities)} modalities:**
+    {', '.join([m.upper() for m in enrolled_modalities])}
+    """)
+    
+    # Biometric sample collection
+    st.markdown("---")
+    st.markdown("### � Step 3: Upload Biometric Samples")
+    
+    # Create tabs for each enrolled modality
+    tabs = []
+    if fp_enrolled:
+        tabs.append("👆 Fingerprint")
+    if face_enrolled:
+        tabs.append("😊 Face")
+    if iris_enrolled:
+        tabs.append("👁️ Iris")
+    if voice_enrolled:
+        tabs.append("🎤 Voice")
+    
+    tab_objects = st.tabs(tabs)
+    
+    scores = {}
+    
+    # Fingerprint tab
+    if fp_enrolled:
+        with tab_objects[tabs.index("👆 Fingerprint")]:
+            st.write("Upload fingerprint image:")
+            fp_file = st.file_uploader("Fingerprint Image", type=['png', 'jpg', 'jpeg', 'bmp'], key="fusion_fp")
+            
+            if fp_file is not None:
+                fp_image = Image.open(fp_file)
+                img_array = np.array(fp_image)
+                
+                if len(img_array.shape) == 3:
+                    img_gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+                else:
+                    img_gray = img_array
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.image(fp_image, caption="Original", use_container_width=True)
+                with col2:
+                    preprocessed = st.session_state.fingerprint_system.preprocess(img_gray)
+                    st.image(preprocessed, caption="Preprocessed", use_container_width=True)
+                
+                try:
+                    is_verified, confidence = st.session_state.fingerprint_system.verify(
+                        user_id, img_gray, threshold=0.3
+                    )
+                    scores['fingerprint'] = confidence
+                    st.metric("Fingerprint Score", f"{confidence:.1%}")
+                except Exception as e:
+                    st.error(f"Error: {e}")
+                    scores['fingerprint'] = 0.0
+    
+    # Face tab
+    if face_enrolled:
+        with tab_objects[tabs.index("😊 Face")]:
+            st.write("Upload face image or use webcam:")
+            face_input_method = st.radio("Input Method:", ["Upload Image", "Webcam Capture"], key="fusion_face_method")
+            
+            if face_input_method == "Upload Image":
+                face_file = st.file_uploader("Face Image", type=['png', 'jpg', 'jpeg'], key="fusion_face")
+                
+                if face_file is not None:
+                    face_image = Image.open(face_file)
+                    img_array = np.array(face_image)
+                    
+                    st.image(face_image, caption="Uploaded Face", use_container_width=True)
+                    
+                    try:
+                        is_verified, confidence = st.session_state.face_system.verify(
+                            user_id, img_array, threshold=0.4
+                        )
+                        scores['face'] = confidence
+                        st.metric("Face Score", f"{confidence:.1%}")
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+                        scores['face'] = 0.0
+            
+            else:  # Webcam
+                picture = st.camera_input("Take a picture", key="fusion_webcam")
+                if picture is not None:
+                    face_image = Image.open(picture)
+                    img_array = np.array(face_image)
+                    
+                    try:
+                        is_verified, confidence = st.session_state.face_system.verify(
+                            user_id, img_array, threshold=0.4
+                        )
+                        scores['face'] = confidence
+                        st.metric("Face Score", f"{confidence:.1%}")
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+                        scores['face'] = 0.0
+    
+    # Iris tab
+    if iris_enrolled:
+        with tab_objects[tabs.index("👁️ Iris")]:
+            st.write("Upload iris image:")
+            iris_file = st.file_uploader("Iris Image", type=['png', 'jpg', 'jpeg', 'bmp'], key="fusion_iris")
+            
+            # Eye side selection
+            eye_side = st.radio("Select Eye Side:", ["auto", "left", "right"], 
+                               format_func=lambda x: {"auto": "🔍 Auto-detect", "left": "👁️ Left Eye", "right": "👁️ Right Eye"}[x],
+                               key="fusion_eye_side", horizontal=True)
+            
+            if iris_file is not None:
+                iris_image = Image.open(iris_file)
+                img_array = np.array(iris_image)
+                
+                if len(img_array.shape) == 3:
+                    img_gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+                else:
+                    img_gray = img_array
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.image(iris_image, caption="Original", use_container_width=True)
+                
+                try:
+                    is_verified, confidence = st.session_state.iris_system.verify(
+                        user_id, img_gray, eye_side=eye_side, threshold=0.65
+                    )
+                    scores['iris'] = confidence
+                    with col2:
+                        st.metric("Iris Score", f"{confidence:.1%}")
+                except Exception as e:
+                    st.error(f"Error: {e}")
+                    scores['iris'] = 0.0
+    
+    # Voice tab
+    if voice_enrolled:
+        with tab_objects[tabs.index("🎤 Voice")]:
+            st.write("Upload audio file or record:")
+            voice_input_method = st.radio("Input Method:", ["Upload Audio", "Record Audio"], key="fusion_voice_method")
+            
+            if voice_input_method == "Upload Audio":
+                voice_file = st.file_uploader("Voice Audio", type=['wav', 'mp3', 'flac', 'm4a'], key="fusion_voice")
+                
+                if voice_file is not None:
+                    import tempfile
+                    import os
+                    
+                    # Save to temp file
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+                        tmp_file.write(voice_file.getbuffer())
+                        temp_audio_path = tmp_file.name
+                    
+                    try:
+                        st.audio(voice_file, format="audio/wav")
+                        
+                        is_verified, confidence = st.session_state.voice_system.verify(
+                            user_id, temp_audio_path, threshold=0.5
+                        )
+                        scores['voice'] = confidence
+                        st.metric("Voice Score", f"{confidence:.1%}")
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+                        scores['voice'] = 0.0
+                    finally:
+                        if os.path.exists(temp_audio_path):
+                            os.unlink(temp_audio_path)
+            
+            else:  # Record audio
+                audio_data = st.audio_input("🎤 Record your voice (3-5 seconds)", key="fusion_audio_rec")
+                
+                if audio_data is not None:
+                    import tempfile
+                    import os
+                    
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+                        tmp_file.write(audio_data.getbuffer())
+                        temp_audio_path = tmp_file.name
+                    
+                    try:
+                        is_verified, confidence = st.session_state.voice_system.verify(
+                            user_id, temp_audio_path, threshold=0.5
+                        )
+                        scores['voice'] = confidence
+                        st.metric("Voice Score", f"{confidence:.1%}")
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+                        scores['voice'] = 0.0
+                    finally:
+                        if os.path.exists(temp_audio_path):
+                            os.unlink(temp_audio_path)
+    
+    # Fusion Decision
+    if len(scores) >= 2:
+        st.markdown("---")
+        st.markdown("### 📌 Step 4: Fusion Results")
+        
+        # Perform fusion
+        is_verified, fusion_confidence = st.session_state.fusion_system.fuse(scores)
+        
+        # Display individual scores with explanation
+        st.markdown("#### 📊 Individual Modality Scores:")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        if 'fingerprint' in scores:
+            with col1:
+                score_pct = scores['fingerprint'] * 100
+                st.metric("👆 Fingerprint", f"{score_pct:.1f}%")
+        if 'face' in scores:
+            with col2:
+                score_pct = scores['face'] * 100
+                st.metric("😊 Face", f"{score_pct:.1f}%")
+        if 'iris' in scores:
+            with col3:
+                score_pct = scores['iris'] * 100
+                st.metric("👁️ Iris", f"{score_pct:.1f}%")
+        if 'voice' in scores:
+            with col4:
+                score_pct = scores['voice'] * 100
+                st.metric("🎤 Voice", f"{score_pct:.1f}%")
+
+        # Display fusion result
+        st.markdown("---")
+        
+        # Explanation of fusion calculation
+        st.markdown("---")
+        st.markdown("#### 🧮 Fusion Calculation:")
+        
+        if fusion_method == "weighted_sum":
+            # Show calculation
+            weights = st.session_state.fusion_system.weights
+            calculation_parts = []
+            for mod, score in scores.items():
+                w = weights.get(mod, 0)
+                calculation_parts.append(f"({score*100:.1f}% × {w*100:.0f}%)")
+            
+            calc_str = " + ".join(calculation_parts)
+            st.markdown(f"""
+            **Formula:**
+            ```
+            Fusion Score = {calc_str}
+            = {fusion_confidence * 100:.1f}%
+            ```
+            """)
+        
+        elif fusion_method == "voting":
+            # Count votes
+            passed = sum(1 for s in scores.values() if s >= 0.5)
+            total = len(scores)
+            st.markdown(f"""
+            **Voting Method:**
+            - Modalities passed (≥50%): **{passed}/{total}**
+            - Required: **3/{total}**
+            - Result: {'✅ ĐẠT' if passed >= 3 else '❌ Not passed'}
+            - Confidence: **{fusion_confidence * 100:.1f}%** (= {passed}/{total})
+            """)
+        
+        else:  # ML-based
+            st.markdown(f"""
+            **AI Prediction:**
+            - Model: **{fusion_method.upper()}**
+            - Input: Điểm từ {len(scores)} modalities
+            - Output: Genuine probability = **{fusion_confidence * 100:.1f}%**
+            """)
+        
+        st.markdown("---")
+        
+        # Display final result
+        if is_verified:
+            st.markdown(f"""
+            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2.5rem; border-radius: 15px; text-align: center; color: white;'>
+                <h1 style='margin: 0; color: white; font-size: 3rem;'>✅ PASS</h1>
+                <h3 style='margin-top: 1rem; color: white;'>ACCESS GRANTED</h3>
+                <div style='background: rgba(255,255,255,0.2); padding: 1rem; border-radius: 10px; margin-top: 1.5rem;'>
+                    <p style='font-size: 2rem; margin: 0; font-weight: bold;'>Confidence: {fusion_confidence * 100:.1f}%</p>
+                </div>
+                <p style='margin-top: 1rem; font-size: 1.1rem;'>User <b>'{user_id}'</b> verified successfully!</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 2.5rem; border-radius: 15px; text-align: center; color: white;'>
+                <h1 style='margin: 0; color: white; font-size: 3rem;'>❌ FAIL</h1>
+                <h3 style='margin-top: 1rem; color: white;'>ACCESS DENIED</h3>
+                <div style='background: rgba(255,255,255,0.2); padding: 1rem; border-radius: 10px; margin-top: 1.5rem;'>
+                    <p style='font-size: 2rem; margin: 0; font-weight: bold;'>Confidence: {fusion_confidence * 100:.1f}%</p>
+                </div>
+                <p style='margin-top: 1rem; font-size: 1.1rem;'>Verification failed. Please try again!</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Visualization
+        st.markdown("---")
+        st.markdown("#### 📊 Visualization:")
+        
+        try:
+            import plotly.graph_objects as go
+            
+            # Create bar chart
+            modality_names = {
+                'fingerprint': '👆 Fingerprint',
+                'face': '😊 Face',
+                'iris': '👁️ Iris',
+                'voice': '🎤 Voice'
+            }
+            
+            x_labels = [modality_names.get(k, k) for k in scores.keys()]
+            y_values = [v * 100 for v in scores.values()]
+            
+            fig = go.Figure()
+            
+            # Add bars
+            fig.add_trace(go.Bar(
+                x=x_labels,
+                y=y_values,
+                text=[f"{v:.1f}%" for v in y_values],
+                textposition='outside',
+                marker=dict(
+                    color=['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A'][:len(scores)],
+                    line=dict(color='white', width=2)
+                ),
+                hovertemplate='%{x}<br>Điểm: %{y:.1f}%<extra></extra>'
+            ))
+            
+            # Add fusion score line
+            fig.add_hline(
+                y=fusion_confidence * 100,
+                line_dash="dash",
+                line_color="green" if is_verified else "red",
+                line_width=3,
+                annotation_text=f"🎯 Fusion: {fusion_confidence*100:.1f}%",
+                annotation_position="right"
+            )
+            
+            # Add threshold line (70%)
+            fig.add_hline(
+                y=70,
+                line_dash="dot",
+                line_color="gray",
+                line_width=2,
+                annotation_text="Threshold: 70%",
+                annotation_position="left"
+            )
+            
+            fig.update_layout(
+                title={
+                    'text': f"<b>Fusion Results - {fusion_method.upper()}</b>",
+                    'x': 0.5,
+                    'xanchor': 'center'
+                },
+                xaxis_title="<b>Modality</b>",
+                yaxis_title="<b>Score (%)</b>",
+                yaxis_range=[0, 110],
+                height=450,
+                showlegend=False,
+                plot_bgcolor='rgba(240,240,240,0.5)',
+                font=dict(size=13)
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Summary statistics
+            st.markdown("#### 📈 Statistics:")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                avg_score = sum(scores.values()) / len(scores)
+                st.metric("Avg Score", f"{avg_score*100:.1f}%")
+            with col2:
+                max_score = max(scores.values())
+                st.metric("Highest", f"{max_score*100:.1f}%")
+            with col3:
+                min_score = min(scores.values())
+                st.metric("Lowest", f"{min_score*100:.1f}%")
+            with col4:
+                st.metric("Modalities", f"{len(scores)}/4")
+                
+        except Exception as e:
+            st.error(f"Chart error: {e}")
+    
+    else:
+        st.info(f"""
+        ℹ️ **Need to upload more biometric samples!**
+        
+        - Currently: {len(scores)} modality
+        - Minimum required: 2 modalities
+        
+        👆 Please upload more images/audio in the tabs above
+        """)
 
 def show_settings():
     st.header("⚙️ System Settings")
