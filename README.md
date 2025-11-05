@@ -48,7 +48,7 @@ The system follows a **modular, layered architecture** designed for scalability 
 
 ```
 ┌───────────────────────────────────────────────────────────────────────┐
-│                    PRESENTATION LAYER (Streamlit)                      │
+│                    PRESENTATION LAYER (Streamlit)                     │
 │  ┌─────────┬────────────┬──────────────┬────────────────┬──────────┐  │
 │  │Dashboard│ Enrollment │ Verification │ Identification │ Settings │  │
 │  └─────────┴────────────┴──────────────┴────────────────┴──────────┘  │
@@ -56,29 +56,29 @@ The system follows a **modular, layered architecture** designed for scalability 
                                       │
                                       ▼
 ┌───────────────────────────────────────────────────────────────────────┐
-│                      BUSINESS LOGIC LAYER                              │
+│                      BUSINESS LOGIC LAYER                             │
 │  ┌──────────────────────────────────────────────────────────────┐     │
-│  │              Recognition Module Interface                     │     │
+│  │              Recognition Module Interface                    │     │
 │  │  • enroll(user_id, sample) → bool                            │     │
 │  │  • verify(user_id, sample, threshold) → (bool, similarity)   │     │
 │  │  • identify(sample, threshold) → List[(user_id, score)]      │     │
 │  └──────────────────────────────────────────────────────────────┘     │
-│                                                                        │
-│  ┌────────────┬─────────────┬────────────┬──────────────┐            │
-│  │Fingerprint │    Iris     │    Face    │    Voice     │            │
-│  │Recognition │ Recognition │Recognition │ Recognition  │            │
-│  └────────────┴─────────────┴────────────┴──────────────┘            │
+│                                                                       │
+│  ┌────────────┬─────────────┬────────────┬──────────────┐             │
+│  │Fingerprint │    Iris     │    Face    │    Voice     │             │
+│  │Recognition │ Recognition │Recognition │ Recognition  │             │
+│  └────────────┴─────────────┴────────────┴──────────────┘             │
 └───────────────────────────────────────────────────────────────────────┘
            │              │              │              │
            ▼              ▼              ▼              ▼
 ┌───────────────────────────────────────────────────────────────────────┐
-│                   ALGORITHM PROCESSING LAYER                           │
-│  ┌──────────┐  ┌───────────┐  ┌──────────┐  ┌─────────────┐          │
-│  │   SIFT   │  │ Daugman's │  │ VGG-Face │  │ ECAPA-TDNN  │          │
-│  │  + FLANN │  │ Algorithm │  │  (Deep   │  │  (Speaker   │          │
-│  │ Matching │  │  + Gabor  │  │  Face)   │  │  Embedding) │          │
-│  └──────────┘  └───────────┘  └──────────┘  └─────────────┘          │
-│                                                                        │
+│                   ALGORITHM PROCESSING LAYER                          │
+│  ┌──────────┐  ┌───────────┐  ┌──────────┐  ┌─────────────┐           │
+│  │   SIFT   │  │ Daugman's │  │ VGG-Face │  │ ECAPA-TDNN  │           │
+│  │  + FLANN │  │ Algorithm │  │  (Deep   │  │  (Speaker   │           │
+│  │ Matching │  │  + Gabor  │  │  Face)   │  │  Embedding) │           │
+│  └──────────┘  └───────────┘  └──────────┘  └─────────────┘           │
+│                                                                       │
 │  Image Processing      Audio Processing      Deep Learning            │
 │  • OpenCV             • librosa              • TensorFlow/Keras       │
 │  • NumPy              • soundfile            • PyTorch                │
@@ -87,16 +87,16 @@ The system follows a **modular, layered architecture** designed for scalability 
                                       │
                                       ▼
 ┌───────────────────────────────────────────────────────────────────────┐
-│                    DATA PERSISTENCE LAYER                              │
+│                    DATA PERSISTENCE LAYER                             │
 │  ┌─────────────────────────────────────────────────────────────┐      │
-│  │              Template Database (Pickle Format)               │      │
+│  │              Template Database (Pickle Format)              │      │
 │  │  ┌─────────────┬──────────┬───────────┬─────────────┐       │      │
 │  │  │Fingerprints │   Iris   │   Faces   │   Voices    │       │      │
 │  │  │   (SIFT     │ (Binary  │ (4096-D   │  (192-D     │       │      │
 │  │  │  features)  │  codes)  │ vectors)  │ embeddings) │       │      │
 │  │  └─────────────┴──────────┴───────────┴─────────────┘       │      │
 │  └─────────────────────────────────────────────────────────────┘      │
-│                                                                        │
+│                                                                       │
 │  File System: data/database/{fingerprints|iris|faces|voices}/         │
 └───────────────────────────────────────────────────────────────────────┘
 ```
