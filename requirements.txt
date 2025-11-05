@@ -1,0 +1,72 @@
+﻿# =============================================================================
+# MULTIMODAL BIOMETRIC AUTHENTICATION - REQUIREMENTS
+# =============================================================================
+# Installation: pip install -r requirements.txt
+# Python Version: 3.12
+# All versions tested and compatible - NO CONFLICTS!
+# =============================================================================
+
+# ============ CORE LIBRARIES ============
+# Pin numpy to 1.26.x for TensorFlow 2.17 compatibility
+numpy>=1.26.0,<2.0.0
+opencv-python>=4.5.0
+opencv-contrib-python>=4.5.0
+pillow>=9.0.0
+
+# ============ MACHINE LEARNING ============
+scikit-learn>=1.0.0
+scipy>=1.7.0
+
+# ============ DEEP LEARNING - PYTORCH ============
+# Pin exact versions to avoid conflicts
+torch==2.7.1
+torchvision==0.22.1
+torchaudio==2.7.1
+
+# ============ DEEP LEARNING - TENSORFLOW ============
+# Pin TensorFlow and dependencies for compatibility
+tensorflow-intel==2.17.0
+tf-keras==2.17.0
+tensorboard>=2.17,<2.18
+ml-dtypes>=0.3.1,<0.5.0
+protobuf>=3.20.3,<5.0.0
+
+# ============ FACE RECOGNITION ============
+deepface>=0.0.79
+
+# ============ VOICE RECOGNITION ============
+# SpeechBrain (pure Python - no C++ compiler needed)
+speechbrain>=1.0.0
+# Pin huggingface_hub for SpeechBrain compatibility
+huggingface-hub>=0.19.0,<0.26.0
+
+# ============ AUDIO PROCESSING ============
+librosa>=0.10.0
+soundfile>=0.12.0
+numba>=0.57.0
+
+# ============ WEB INTERFACE ============
+streamlit>=1.28.0
+streamlit-option-menu>=0.3.0
+
+# ============ VISUALIZATION ============
+matplotlib>=3.7.0
+seaborn>=0.12.0
+plotly>=5.14.0
+
+# ============ DATA PROCESSING ============
+pandas>=2.0.0
+tqdm>=4.65.0
+
+# ============ JUPYTER NOTEBOOKS ============
+jupyter>=1.0.0
+notebook>=7.0.0
+ipykernel>=6.25.0
+ipywidgets>=8.0.0
+
+# ============ UTILITIES ============
+python-dateutil>=2.8.0
+
+# ============ TESTING ============
+pytest>=7.0.0
+pytest-cov>=3.0.0
