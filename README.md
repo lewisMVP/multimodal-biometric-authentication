@@ -50,58 +50,58 @@ A comprehensive biometric authentication system implementing **4 biometric modal
 The system follows a **modular, layered architecture** designed for scalability and maintainability:
 
 ```
-┌───────────────────────────────────────────────────────────────────────┐
-│                    PRESENTATION LAYER (Streamlit)                     │
-│  ┌─────────┬────────────┬──────────────┬────────────────┬──────────┐  │
-│  │Dashboard│ Enrollment │ Verification │ Identification │ Settings │  │
-│  └─────────┴────────────┴──────────────┴────────────────┴──────────┘  │
-└───────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌───────────────────────────────────────────────────────────────────────┐
-│                      BUSINESS LOGIC LAYER                             │
-│  ┌──────────────────────────────────────────────────────────────┐     │
-│  │              Recognition Module Interface                    │     │
-│  │  • enroll(user_id, sample) → bool                            │     │
-│  │  • verify(user_id, sample, threshold) → (bool, similarity)   │     │
-│  │  • identify(sample, threshold) → List[(user_id, score)]      │     │
-│  └──────────────────────────────────────────────────────────────┘     │
-│                                                                       │
-│  ┌────────────┬─────────────┬────────────┬──────────────┐             │
-│  │Fingerprint │    Iris     │    Face    │    Voice     │             │
-│  │Recognition │ Recognition │Recognition │ Recognition  │             │
-│  └────────────┴─────────────┴────────────┴──────────────┘             │
-└───────────────────────────────────────────────────────────────────────┘
-           │              │              │              │
-           ▼              ▼              ▼              ▼
-┌───────────────────────────────────────────────────────────────────────┐
-│                   ALGORITHM PROCESSING LAYER                          │
-│  ┌──────────┐  ┌───────────┐  ┌──────────┐  ┌─────────────┐           │
-│  │   SIFT   │  │ Daugman's │  │ VGG-Face │  │ ECAPA-TDNN  │           │
-│  │  + FLANN │  │ Algorithm │  │  (Deep   │  │  (Speaker   │           │
-│  │ Matching │  │  + Gabor  │  │  Face)   │  │  Embedding) │           │
-│  └──────────┘  └───────────┘  └──────────┘  └─────────────┘           │
-│                                                                       │
-│  Image Processing      Audio Processing      Deep Learning            │
-│  • OpenCV             • librosa              • TensorFlow/Keras       │
-│  • NumPy              • soundfile            • PyTorch                │
-│  • scikit-image       • VAD                  • DeepFace/SpeechBrain   │
-└───────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌───────────────────────────────────────────────────────────────────────┐
-│                    DATA PERSISTENCE LAYER                             │
-│  ┌─────────────────────────────────────────────────────────────┐      │
-│  │              Template Database (Pickle Format)              │      │
-│  │  ┌─────────────┬──────────┬───────────┬─────────────┐       │      │
-│  │  │Fingerprints │   Iris   │   Faces   │   Voices    │       │      │
-│  │  │   (SIFT     │ (Binary  │ (4096-D   │  (192-D     │       │      │
-│  │  │  features)  │  codes)  │ vectors)  │ embeddings) │       │      │
-│  │  └─────────────┴──────────┴───────────┴─────────────┘       │      │
-│  └─────────────────────────────────────────────────────────────┘      │
-│                                                                       │
-│  File System: data/database/{fingerprints|iris|faces|voices}/         │
-└───────────────────────────────────────────────────────────────────────┘
+        ┌───────────────────────────────────────────────────────────────────────┐
+        │                    PRESENTATION LAYER (Streamlit)                     │
+        │  ┌─────────┬────────────┬──────────────┬────────────────┬──────────┐  │
+        │  │Dashboard│ Enrollment │ Verification │ Identification │ Settings │  │
+        │  └─────────┴────────────┴──────────────┴────────────────┴──────────┘  │
+        └───────────────────────────────────────────────────────────────────────┘
+                                            │
+                                            ▼
+        ┌───────────────────────────────────────────────────────────────────────┐
+        │                      BUSINESS LOGIC LAYER                             │
+        │  ┌──────────────────────────────────────────────────────────────┐     │
+        │  │              Recognition Module Interface                    │     │
+        │  │  • enroll(user_id, sample) → bool                            │     │
+        │  │  • verify(user_id, sample, threshold) → (bool, similarity)   │     │
+        │  │  • identify(sample, threshold) → List[(user_id, score)]      │     │
+        │  └──────────────────────────────────────────────────────────────┘     │
+        │                                                                       │
+        │  ┌────────────┬─────────────┬────────────┬──────────────┐             │
+        │  │Fingerprint │    Iris     │    Face    │    Voice     │             │
+        │  │Recognition │ Recognition │Recognition │ Recognition  │             │
+        │  └────────────┴─────────────┴────────────┴──────────────┘             │
+        └───────────────────────────────────────────────────────────────────────┘
+                │              │              │              │
+                ▼              ▼              ▼              ▼
+        ┌───────────────────────────────────────────────────────────────────────┐
+        │                   ALGORITHM PROCESSING LAYER                          │
+        │  ┌──────────┐  ┌───────────┐  ┌──────────┐  ┌─────────────┐           │
+        │  │   SIFT   │  │ Daugman's │  │ VGG-Face │  │ ECAPA-TDNN  │           │
+        │  │  + FLANN │  │ Algorithm │  │  (Deep   │  │  (Speaker   │           │
+        │  │ Matching │  │  + Gabor  │  │  Face)   │  │  Embedding) │           │
+        │  └──────────┘  └───────────┘  └──────────┘  └─────────────┘           │
+        │                                                                       │
+        │  Image Processing      Audio Processing      Deep Learning            │
+        │  • OpenCV             • librosa              • TensorFlow/Keras       │
+        │  • NumPy              • soundfile            • PyTorch                │
+        │  • scikit-image       • VAD                  • DeepFace/SpeechBrain   │
+        └───────────────────────────────────────────────────────────────────────┘
+                                            │
+                                            ▼
+        ┌───────────────────────────────────────────────────────────────────────┐
+        │                    DATA PERSISTENCE LAYER                             │
+        │  ┌─────────────────────────────────────────────────────────────┐      │
+        │  │              Template Database (Pickle Format)              │      │
+        │  │  ┌─────────────┬──────────┬───────────┬─────────────┐       │      │
+        │  │  │Fingerprints │   Iris   │   Faces   │   Voices    │       │      │
+        │  │  │   (SIFT     │ (Binary  │ (4096-D   │  (192-D     │       │      │
+        │  │  │  features)  │  codes)  │ vectors)  │ embeddings) │       │      │
+        │  │  └─────────────┴──────────┴───────────┴─────────────┘       │      │
+        │  └─────────────────────────────────────────────────────────────┘      │
+        │                                                                       │
+        │  File System: data/database/{fingerprints|iris|faces|voices}/         │
+        └───────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Architecture Highlights
