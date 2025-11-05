@@ -30,7 +30,7 @@ class IrisRecognition:
         self.database_path = Path(database_path)
         self.database_path.mkdir(parents=True, exist_ok=True)
         self.templates = {}
-        self.optimal_threshold = 0.35  # Hamming distance threshold
+        self.optimal_threshold = 0.35  # Hamming distance threshold (1-0.35=0.65 similarity)
         
         # Normalization parameters
         self.norm_height = 64
@@ -299,8 +299,10 @@ class IrisRecognition:
                 # Filter normalized iris
                 filtered = cv2.filter2D(normalized_iris, cv2.CV_32F, kernel)
                 
-                # Quantize to binary (phase information)
-                binary_code = (filtered > 0).astype(np.uint8)
+                # Quantize to binary using MEDIAN (not zero!)
+                # This properly encodes phase information
+                threshold = np.median(filtered)
+                binary_code = (filtered > threshold).astype(np.uint8)
                 iris_code.append(binary_code)
             
             # Concatenate all orientations
@@ -502,20 +504,70 @@ class IrisRecognition:
         
         return ', '.join(issues) if issues else 'multiple issues'
     
+    def detect_eye_side(self, iris_image: np.ndarray, params: Dict) -> str:
+        """
+        Detect which eye (left/right) based on pupil position relative to iris center
+        
+        Logic (when looking at the image):
+        - If pupil is to the LEFT of iris center → LEFT eye (pupil closer to nose on left)
+        - If pupil is to the RIGHT of iris center → RIGHT eye (pupil closer to nose on right)
+        - If centered (within threshold) → UNKNOWN
+        
+        Args:
+            iris_image: Eye image
+            params: Segmentation parameters with iris_center and pupil_center
+            
+        Returns:
+            "left", "right", or "unknown"
+        """
+        try:
+            iris_x = params['iris_center'][0]
+            pupil_x = params['pupil_center'][0]
+            iris_radius = params['iris_radius']
+            
+            # Calculate horizontal offset as percentage of iris radius
+            offset = pupil_x - iris_x
+            offset_ratio = offset / iris_radius
+            
+            # Threshold for determining eye side (10% of iris radius)
+            threshold = 0.1
+            
+            if offset_ratio < -threshold:
+                # Pupil is significantly LEFT of iris center → LEFT eye
+                return "left"
+            elif offset_ratio > threshold:
+                # Pupil is significantly RIGHT of iris center → RIGHT eye
+                return "right"
+            else:
+                # Pupil is centered → Cannot determine
+                return "unknown"
+                
+        except Exception as e:
+            print(f"⚠️ Eye side detection failed: {e}")
+            return "unknown"
+    
     def enroll(self, user_id: str, iris_image: np.ndarray,
-               check_quality: bool = True) -> bool:
+               eye_side: str = "unknown", check_quality: bool = True) -> bool:
         """
         Enroll a user's iris into the system with quality check
+        Supports enrolling left and right eye separately
         
         Args:
             user_id: Unique user identifier
             iris_image: Iris/eye image
+            eye_side: "left", "right", or "unknown" to specify which eye
             check_quality: Whether to perform quality assessment
             
         Returns:
             True if enrollment successful, False otherwise
         """
         try:
+            # Validate eye_side parameter
+            eye_side = eye_side.lower()
+            if eye_side not in ["left", "right", "unknown"]:
+                print(f"⚠️ Invalid eye_side '{eye_side}', using 'unknown'")
+                eye_side = "unknown"
+            
             # Load image if path is provided
             if isinstance(iris_image, str):
                 iris_image = cv2.imread(iris_image, cv2.IMREAD_GRAYSCALE)
@@ -529,7 +581,30 @@ class IrisRecognition:
                 print("✗ Iris segmentation failed")
                 return False
             
+            # Detect actual eye side from image
+            detected_eye = self.detect_eye_side(iris_image, params)
+            
+            # Validate eye side if user specified left or right
+            if eye_side in ["left", "right"]:
+                if detected_eye in ["left", "right"] and detected_eye != eye_side:
+                    # Mismatch detected - but don't reject, just warn
+                    print(f"⚠️ Eye side mismatch detected!")
+                    print(f"   User selected: {eye_side.upper()} eye")
+                    print(f"   Auto-detected: {detected_eye.upper()} eye")
+                    print(f"   Note: Detection may be inaccurate. Proceeding with user selection.")
+                elif detected_eye == "unknown":
+                    print(f"ℹ️ Cannot auto-detect eye side (pupil centered)")
+                    print(f"   Proceeding with user selection: {eye_side.upper()} eye")
+                elif detected_eye == eye_side:
+                    print(f"✓ Eye side confirmed: {eye_side.upper()} eye")
+            else:
+                # User selected "unknown", use detected value if available
+                if detected_eye in ["left", "right"]:
+                    eye_side = detected_eye
+                    print(f"ℹ️ Auto-detected: {eye_side.upper()} eye")
+            
             # Quality assessment
+            quality = None
             if check_quality:
                 quality = self.assess_iris_quality(segmented, params)
                 print(f"   Quality: {quality['overall']:.1f}/100 ({quality['recommendation']})")
@@ -555,18 +630,28 @@ class IrisRecognition:
                 print(f"✗ Too much occlusion ({features['valid_ratio']*100:.1f}% valid)")
                 return False
             
-            # Store template
-            self.templates[user_id] = {
+            # Get or create user template
+            if user_id not in self.templates:
+                self.templates[user_id] = {
+                    'eyes': {},
+                    'enrolled_date': str(np.datetime64('now'))
+                }
+            
+            # Store template for specific eye
+            self.templates[user_id]['eyes'][eye_side] = {
                 'features': features,
                 'params': params,
-                'quality': quality if check_quality else None,
+                'quality': quality,
                 'enrolled_date': str(np.datetime64('now'))
             }
             
             # Save to disk
             self.save_templates()
             
-            print(f"✓ User {user_id} enrolled successfully (Iris, {features['valid_ratio']*100:.1f}% valid bits)")
+            eye_label = eye_side.capitalize() if eye_side != "unknown" else "Unknown"
+            enrolled_eyes = list(self.templates[user_id]['eyes'].keys())
+            print(f"✓ User {user_id} enrolled successfully ({eye_label} eye, {features['valid_ratio']*100:.1f}% valid bits)")
+            print(f"   Enrolled eyes: {', '.join([e.capitalize() for e in enrolled_eyes])}")
             return True
             
         except Exception as e:
@@ -574,14 +659,17 @@ class IrisRecognition:
             return False
     
     def verify(self, user_id: str, iris_image: np.ndarray,
-               threshold: Optional[float] = None) -> Tuple[bool, float]:
+               threshold: Optional[float] = None,
+               eye_side: str = "auto") -> Tuple[bool, float]:
         """
         Verify if iris matches the claimed user (1:1 matching)
+        Supports verification with any enrolled eye (auto-detect best match)
         
         Args:
             user_id: Claimed user ID
             iris_image: Iris to verify
             threshold: Verification threshold
+            eye_side: "left", "right", "auto" (checks all enrolled eyes)
             
         Returns:
             Tuple of (is_verified, confidence_score)
@@ -593,6 +681,11 @@ class IrisRecognition:
             # Check if user exists
             if user_id not in self.templates:
                 print(f"✗ User {user_id} not found in database")
+                return False, 0.0
+            
+            # Check if user has any enrolled eyes
+            if not self.templates[user_id]['eyes']:
+                print(f"✗ User {user_id} has no enrolled eyes")
                 return False, 0.0
             
             # Load image if path is provided
@@ -615,13 +708,40 @@ class IrisRecognition:
             if features is None:
                 return False, 0.0
             
-            # Match with stored template
-            stored_features = self.templates[user_id]['features']
-            similarity, hamming_dist, shift = self.match_features(features, stored_features)
+            # Validate eye_side parameter
+            eye_side = eye_side.lower()
+            enrolled_eyes = list(self.templates[user_id]['eyes'].keys())
             
-            is_verified = similarity >= threshold
+            # Determine which eyes to check
+            if eye_side == "auto":
+                eyes_to_check = enrolled_eyes
+            elif eye_side in enrolled_eyes:
+                eyes_to_check = [eye_side]
+            else:
+                print(f"✗ {eye_side.capitalize()} eye not enrolled for {user_id}")
+                print(f"   Available: {', '.join([e.capitalize() for e in enrolled_eyes])}")
+                return False, 0.0
             
-            return is_verified, similarity
+            # Compare with all specified eyes, take best match
+            best_similarity = 0.0
+            best_eye = None
+            
+            for eye in eyes_to_check:
+                stored_features = self.templates[user_id]['eyes'][eye]['features']
+                similarity, hamming_dist, shift = self.match_features(features, stored_features)
+                
+                if similarity > best_similarity:
+                    best_similarity = similarity
+                    best_eye = eye
+            
+            is_verified = best_similarity >= threshold
+            
+            if is_verified:
+                print(f"✓ Verified as {user_id} ({best_eye} eye, similarity: {best_similarity:.3f})")
+            else:
+                print(f"✗ Not verified (best: {best_similarity:.3f} < {threshold:.3f})")
+            
+            return is_verified, best_similarity
             
         except Exception as e:
             print(f"✗ Iris verification failed: {str(e)}")
@@ -632,6 +752,7 @@ class IrisRecognition:
                  top_n: int = 5) -> List[Tuple[str, float]]:
         """
         Identify user from iris (1:N matching)
+        Compares against all enrolled eyes from all users
         
         Args:
             iris_image: Iris to identify
@@ -665,14 +786,25 @@ class IrisRecognition:
             if features is None:
                 return []
             
-            # Match against all templates
+            # Match against all templates (all eyes from all users)
             results = []
-            for user_id, template in self.templates.items():
-                stored_features = template['features']
-                similarity, _, _ = self.match_features(features, stored_features)
+            for user_id, user_data in self.templates.items():
+                # Check all enrolled eyes for this user
+                best_similarity = 0.0
+                best_eye = None
                 
-                if similarity >= threshold:
-                    results.append((user_id, similarity))
+                for eye_side, eye_data in user_data['eyes'].items():
+                    stored_features = eye_data['features']
+                    similarity, _, _ = self.match_features(features, stored_features)
+                    
+                    if similarity > best_similarity:
+                        best_similarity = similarity
+                        best_eye = eye_side
+                
+                # Only add if above threshold
+                if best_similarity >= threshold:
+                    results.append((user_id, best_similarity))
+                    print(f"   {user_id}: {best_similarity:.3f} ({best_eye} eye)")
             
             # Sort by score (descending)
             results.sort(key=lambda x: x[1], reverse=True)
@@ -690,13 +822,43 @@ class IrisRecognition:
             pickle.dump(self.templates, f)
     
     def load_templates(self):
-        """Load iris templates from disk"""
+        """Load iris templates from disk with migration support"""
         template_file = self.database_path / "templates.pkl"
         if template_file.exists():
             try:
                 with open(template_file, 'rb') as f:
-                    self.templates = pickle.load(f)
-                print(f"✓ Loaded {len(self.templates)} iris templates")
+                    loaded_templates = pickle.load(f)
+                
+                # Migrate old format to new format
+                migrated = False
+                for user_id, template in loaded_templates.items():
+                    # Check if old format (has 'features' key directly)
+                    if 'features' in template and 'eyes' not in template:
+                        # Migrate to new format
+                        loaded_templates[user_id] = {
+                            'eyes': {
+                                'unknown': {
+                                    'features': template['features'],
+                                    'params': template.get('params'),
+                                    'quality': template.get('quality'),
+                                    'enrolled_date': template.get('enrolled_date', str(np.datetime64('now')))
+                                }
+                            },
+                            'enrolled_date': template.get('enrolled_date', str(np.datetime64('now')))
+                        }
+                        migrated = True
+                
+                self.templates = loaded_templates
+                
+                # Count total eyes
+                total_eyes = sum(len(user['eyes']) for user in self.templates.values())
+                
+                if migrated:
+                    print(f"✓ Migrated {len(self.templates)} users to new format (multi-eye support)")
+                    self.save_templates()  # Save migrated format
+                
+                print(f"✓ Loaded {len(self.templates)} users with {total_eyes} eyes")
+                
             except Exception as e:
                 print(f"⚠️ Could not load templates: {e}")
                 self.templates = {}
@@ -706,8 +868,18 @@ class IrisRecognition:
     
     def get_statistics(self) -> Dict:
         """Get database statistics"""
+        total_eyes = sum(len(user['eyes']) for user in self.templates.values())
+        
+        # Count by eye type
+        eye_counts = {'left': 0, 'right': 0, 'unknown': 0}
+        for user in self.templates.values():
+            for eye_side in user['eyes'].keys():
+                eye_counts[eye_side] = eye_counts.get(eye_side, 0) + 1
+        
         return {
             'total_users': len(self.templates),
+            'total_eyes': total_eyes,
+            'eyes_breakdown': eye_counts,
             'method': 'Daugman (Hough + Gabor)',
             'database_path': str(self.database_path)
         }

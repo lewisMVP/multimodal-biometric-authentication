@@ -70,7 +70,7 @@ class FingerprintRecognition:
         Options:
         1. Minutiae-based: Extract ridge endings and bifurcations
         2. Deep learning: Use pre-trained CNN
-        3. ORB/SIFT descriptors
+        3. SIFT/ORB descriptors
         
         Args:
             image: Preprocessed fingerprint image
@@ -78,9 +78,10 @@ class FingerprintRecognition:
         Returns:
             Dictionary containing feature descriptors and keypoints
         """
-        # Method 1: Using ORB (Oriented FAST and Rotated BRIEF)
-        orb = cv2.ORB_create(nfeatures=500)
-        keypoints, descriptors = orb.detectAndCompute(image, None)
+        # Method: Using SIFT (Scale-Invariant Feature Transform)
+        # SIFT provides better accuracy than ORB for fingerprint matching
+        sift = cv2.SIFT_create(nfeatures=500)
+        keypoints, descriptors = sift.detectAndCompute(image, None)
         
         # Convert keypoints to serializable format
         keypoints_data = [
@@ -97,7 +98,7 @@ class FingerprintRecognition:
         features = {
             'keypoints': keypoints_data,
             'descriptors': descriptors,
-            'method': 'ORB'
+            'method': 'SIFT'
         }
         
         return features
@@ -121,11 +122,16 @@ class FingerprintRecognition:
         if desc1 is None or desc2 is None:
             return 0.0, 0
         
-        # Use BFMatcher with Hamming distance for ORB
-        bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
+        # Use FLANN matcher with L2 norm for SIFT (float descriptors)
+        # FLANN parameters for SIFT
+        FLANN_INDEX_KDTREE = 1
+        index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+        search_params = dict(checks=50)
+        
+        flann = cv2.FlannBasedMatcher(index_params, search_params)
         
         try:
-            matches = bf.knnMatch(desc1, desc2, k=2)
+            matches = flann.knnMatch(desc1, desc2, k=2)
         except:
             return 0.0, 0
         

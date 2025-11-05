@@ -150,13 +150,16 @@ def show_dashboard():
     with col1:
         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
         st.metric("👆 Fingerprint Users", fp_stats['total_users'])
-        st.caption("✓ ORB Feature Extraction")
+        st.caption("✓ SIFT Feature Extraction")
         st.markdown('</div>', unsafe_allow_html=True)
     
     with col2:
         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
         st.metric("👁️ Iris Users", iris_stats['total_users'])
-        st.caption("✓ Daugman's Algorithm")
+        if 'total_eyes' in iris_stats:
+            st.caption(f"✓ {iris_stats['total_eyes']} eyes enrolled")
+        else:
+            st.caption("✓ Daugman's Algorithm")
         st.markdown('</div>', unsafe_allow_html=True)
     
     with col3:
@@ -180,9 +183,9 @@ def show_dashboard():
         st.subheader("🎯 Active Biometric Modalities")
         st.success("""
         **✅ Fingerprint Recognition**
-        - Algorithm: ORB (Oriented FAST and Rotated BRIEF)
+        - Algorithm: SIFT (Scale-Invariant Feature Transform)
         - Preprocessing: CLAHE + Gaussian Blur
-        - Matching: BFMatcher with Hamming distance
+        - Matching: FLANN-based KNN with Lowe's ratio test
         
         **✅ Iris Recognition**
         - Algorithm: Daugman's Rubber Sheet Model
@@ -329,6 +332,19 @@ def enroll_iris(user_id):
     """Iris enrollment section"""
     st.subheader("👁️ Iris Capture")
     
+    # Eye side selector
+    eye_side = st.radio(
+        "Select Eye to Enroll",
+        options=["Left Eye", "Right Eye"],
+        horizontal=True,
+        help="Choose which eye you're enrolling. The system will validate that you uploaded the correct eye.",
+        key="iris_eye_selector"
+    )
+    
+    # Map display text to internal value
+    eye_map = {"Left Eye": "left", "Right Eye": "right"}
+    eye_value = eye_map[eye_side]
+    
     tab1, tab2 = st.tabs(["📁 Upload Image", "📷 Live Capture"])
     
     with tab1:
@@ -365,6 +381,17 @@ def enroll_iris(user_id):
                         cv2.circle(vis_img, params['pupil_center'], params['pupil_radius'], (255, 0, 0), 2)
                         st.image(vis_img, caption="Segmented Iris", use_container_width=True)
                         
+                        # Auto-detect eye side and show warning if mismatch
+                        detected_eye = st.session_state.iris_system.detect_eye_side(img_gray, params)
+                        
+                        if detected_eye in ["left", "right"]:
+                            if detected_eye != eye_value:
+                                st.warning(f"⚠️ **Eye Side Warning**\n\nYou selected: **{eye_value.upper()}** eye\n\nAuto-detected: **{detected_eye.upper()}** eye\n\nNote: Auto-detection may be inaccurate. Please verify your selection.")
+                            else:
+                                st.success(f"✓ Confirmed: **{eye_value.upper()}** eye")
+                        else:
+                            st.info(f"ℹ️ Cannot auto-detect eye side. Using your selection: **{eye_value.upper()}** eye")
+                        
                         # Show quality assessment
                         quality = st.session_state.iris_system.assess_iris_quality(img_gray, params)
                         st.metric("Quality Score", f"{quality['overall']:.0f}/100")
@@ -379,11 +406,12 @@ def enroll_iris(user_id):
                 if not user_id:
                     st.error("❌ Please enter a User ID")
                 else:
-                    with st.spinner("Enrolling iris template..."):
-                        success = st.session_state.iris_system.enroll(user_id, img_gray)
+                    with st.spinner(f"Enrolling {eye_side.lower()} template..."):
+                        success = st.session_state.iris_system.enroll(user_id, img_gray, 
+                                                                      eye_side=eye_value)
                         
                         if success:
-                            st.markdown(f'<div class="success-box">✅ User {user_id} iris enrolled successfully!</div>', 
+                            st.markdown(f'<div class="success-box">✅ User {user_id} {eye_side.lower()} enrolled successfully!</div>', 
                                       unsafe_allow_html=True)
                             st.balloons()
                         else:
@@ -787,6 +815,19 @@ def verify_iris(user_id):
     """Iris verification section"""
     st.subheader("👁️ Iris to Verify")
     
+    # Eye side selector for verification
+    eye_side = st.radio(
+        "Eye to Verify",
+        options=["Auto (Check All)", "Left Eye", "Right Eye"],
+        horizontal=True,
+        help="Select which eye to verify, or Auto to check all enrolled eyes",
+        key="iris_verify_eye_selector"
+    )
+    
+    # Map display text to internal value
+    eye_map = {"Auto (Check All)": "auto", "Left Eye": "left", "Right Eye": "right"}
+    eye_value = eye_map[eye_side]
+    
     uploaded_file = st.file_uploader("Upload iris image", 
                                     type=['png', 'jpg', 'jpeg', 'bmp'],
                                     key="verify_iris_upload")
@@ -822,19 +863,20 @@ def verify_iris(user_id):
         
         # Verification settings
         with st.expander("⚙️ Advanced Settings"):
-            threshold = st.slider("Hamming Distance Threshold", 
-                                min_value=0.0, max_value=0.5, 
-                                value=0.32, step=0.01,
-                                help="Lower = stricter verification")
+            # Slider for similarity threshold (NOT Hamming distance)
+            similarity_threshold = st.slider("Similarity Threshold", 
+                                min_value=0.0, max_value=1.0, 
+                                value=0.65, step=0.01,
+                                help="Higher = stricter verification (recommended: 0.65)")
         
         # Verify button
         if st.button("🔍 Verify Iris", type="primary", use_container_width=True, key="verify_iris_btn"):
             if not user_id:
                 st.error("❌ Please enter a User ID")
             else:
-                with st.spinner("Verifying iris pattern..."):
+                with st.spinner(f"Verifying iris pattern ({eye_side.lower()})..."):
                     is_verified, confidence = st.session_state.iris_system.verify(
-                        user_id, img_gray, threshold
+                        user_id, img_gray, similarity_threshold, eye_side=eye_value
                     )
                     
                     # Display results
@@ -1312,9 +1354,10 @@ def identify_iris():
         with st.expander("⚙️ Advanced Settings"):
             col1, col2 = st.columns(2)
             with col1:
-                threshold = st.slider("Hamming Distance Threshold", 
-                                    min_value=0.0, max_value=0.5, 
-                                    value=0.32, step=0.01,
+                similarity_threshold = st.slider("Similarity Threshold", 
+                                    min_value=0.0, max_value=1.0, 
+                                    value=0.65, step=0.01,
+                                    help="Higher = stricter matching (recommended: 0.65)",
                                     key="identify_iris_threshold")
             with col2:
                 top_n = st.number_input("Top N Results", 
@@ -1325,7 +1368,7 @@ def identify_iris():
         if st.button("🔎 Identify Iris", type="primary", use_container_width=True, key="identify_iris_btn"):
             with st.spinner("Searching iris database..."):
                 results = st.session_state.iris_system.identify(
-                    img_gray, threshold, top_n
+                    img_gray, similarity_threshold, top_n
                 )
                 
                 # Display results
@@ -1756,8 +1799,8 @@ def show_settings():
     col1, col2 = st.columns(2)
     
     with col1:
-        st.number_input("ORB Features", value=500, step=50, 
-                       help="Number of ORB keypoints to extract")
+        st.number_input("SIFT Features", value=500, step=50, 
+                       help="Number of SIFT keypoints to extract")
         st.number_input("CLAHE Clip Limit", value=2.0, step=0.1,
                        help="Contrast limiting for CLAHE preprocessing")
     
@@ -1798,7 +1841,15 @@ def show_settings():
     st.metric(f"📊 Total {db_name} Users", len(users))
     
     if users:
-        st.write(f"**Enrolled Users:** {', '.join(users)}")
+        # Show enrolled users with eye details for Iris
+        if db_modality == "👁️ Iris":
+            st.write("**Enrolled Users:**")
+            for user_id in users:
+                enrolled_eyes = list(system.templates[user_id]['eyes'].keys())
+                eye_labels = [e.capitalize() for e in enrolled_eyes]
+                st.write(f"- **{user_id}**: {', '.join(eye_labels)}")
+        else:
+            st.write(f"**Enrolled Users:** {', '.join(users)}")
         
         # Delete individual user
         st.write("---")
@@ -1854,8 +1905,8 @@ def show_settings():
         
         - Database: `{st.session_state.fingerprint_system.database_path}`
         - Preprocessing: CLAHE + Gaussian Blur
-        - Feature Extraction: ORB (Oriented FAST and Rotated BRIEF)
-        - Matching: BFMatcher with Hamming distance
+        - Feature Extraction: SIFT (Scale-Invariant Feature Transform)
+        - Matching: FLANN-based KNN with Lowe's ratio test
         """)
     
     with col2:
